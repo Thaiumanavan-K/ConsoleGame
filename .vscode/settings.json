@@ -1,0 +1,6 @@
+{
+    "python.defaultInterpreterPath": "C:\\Users\\thaiu\\AppData\\Local\\Programs\\Python\\Python311\\python.exe",
+    "python.analysis.extraPaths": [
+        "C:\\Users\\thaiu\\AppData\\Local\\Programs\\Python\\Python311\\Lib\\site-packages"
+    ]
+}

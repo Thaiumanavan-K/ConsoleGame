@@ -1,0 +1,100 @@
+# ROVdqn Project Guide: Hardware & Software
+
+This document provides a comprehensive analysis of the ROVdqn project, including step-by-step hardware connections and a guide on how to operate the system.
+
+## Project Overview
+The **ROVdqn** is an Autonomous AI-Driven Plume Tracker. It uses a Deep Q-Network (DQN) running on a laptop to control a rover. The architecture consists of:
+1.  **Laptop Brain**: Runs the AI model and sends motor commands via UDP.
+2.  **ESP32 Bridge**: Relays UDP packets from the laptop to the Pico via UART and vice versa.
+3.  **Raspberry Pi Pico**: Performs high-speed sensor acquisition (Ultrasonic, MQ-2) and motor control.
+
+---
+
+## 1. Hardware Connection Guide
+
+### A. Raspberry Pi Pico (Main Worker)
+The Pico acts as the central controller for sensors and motors.
+
+| Component | Pico Pin | Component Pin | Description |
+| :--- | :--- | :--- | :--- |
+| **ESP32 Bridge** | **GP0 (TX0)** | **GPIO16 (RX2)** | UART Communication (Send) |
+| **ESP32 Bridge** | **GP1 (RX0)** | **GPIO17 (TX2)** | UART Communication (Receive) |
+| **L298N Motor Driver** | **GP2** | **ENA** | PWM: Left Motor Speed |
+| **L298N Motor Driver** | **GP3** | **IN1** | Left Motor Direction 1 |
+| **L298N Motor Driver** | **GP4** | **IN2** | Left Motor Direction 2 |
+| **L298N Motor Driver** | **GP5** | **IN3** | Right Motor Direction 1 |
+| **L298N Motor Driver** | **GP6** | **IN4** | Right Motor Direction 2 |
+| **L298N Motor Driver** | **GP7** | **ENB** | PWM: Right Motor Speed |
+| **HC-SR04** | **GP14** | **Trigger** | Ultrasonic Trigger |
+| **HC-SR04** | **GP13** | **Echo** | Ultrasonic Echo |
+| **SG90 Servo** | **GP15** | **Signal** | Servo Control (PWM) |
+| **MQ-2 Smoke Sensor**| **GP26 (ADC0)** | **A0 (Analog)** | Smoke/Gas Analog Input |
+| **Power** | **VBUS / VSYS** | **5V / Battery** | Power input (ensure common GND) |
+| **Ground** | **GND** | **GND** | Connect all GNDs together |
+
+### B. ESP32 (WiFi Bridge)
+The ESP32 provides wireless connectivity to the laptop.
+
+| Component | ESP32 Pin | Component Pin | Description |
+| :--- | :--- | :--- | :--- |
+| **Pico UART0** | **GPIO16** | **GP0 (TX)** | Serial RX from Pico |
+| **Pico UART0** | **GPIO17** | **GP1 (RX)** | Serial TX to Pico |
+| **Status LED** | **GPIO2** | **Built-in LED** | WiFi Status indicator |
+
+---
+
+## 2. Project Operation Guide
+
+### Step 1: Hardware Assembly
+1.  Mount the **HC-SR04** ultrasonic sensor on the **SG90 servo**.
+2.  Connect the motors to the **L298N motor driver**.
+3.  Connect the **Pico** and **ESP32** via UART (ensure RX-TX and TX-RX crossing).
+4.  Power the system using a battery (e.g., 7.4V Li-ion or 11.1V Lipo). Use a buck converter if necessary to provide 5V to the ESP32 and Pico.
+
+### Step 2: Firmware Upload
+1.  **ESP32**:
+    -   Open [esp32_bridge.ino](file:///e:/Final%20Year%20Project/ROVdqn/ROVdqn/esp32_bridge.ino) in Arduino IDE.
+    -   Change `WIFI_SSID`, `WIFI_PASSWORD`, and `laptop_IP` to match your network.
+    -   Upload to ESP32.
+2.  **Pico**:
+    -   Flash MicroPython to the Pico.
+    -   Use Thonny or similar tool to upload [pico_main.py](file:///e:/Final%20Year%20Project/ROVdqn/ROVdqn/pico_main.py) as [main.py](file:///e:/Final%20Year%20Project/ROVdqn/ROVdqn/pico_main.py) to the Pico.
+
+### Step 3: Laptop Setup
+1.  Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+2.  Ensure your laptop is on the same WiFi network as the ESP32.
+
+### Step 4: Running the Brain
+The [laptop_brain.py](file:///e:/Final%20Year%20Project/ROVdqn/ROVdqn/laptop_brain.py) supports multiple modes:
+
+*   **Test Connection**: Check if the laptop can talk to the rover.
+    ```bash
+    python laptop_brain.py --mode test
+    ```
+*   **Manual Control**: Drive the rover using WASD keys.
+    ```bash
+    python laptop_brain.py --mode manual
+    ```
+*   **Train AI**: Train the DQN model on real hardware.
+    ```bash
+    python laptop_brain.py --mode train --timesteps 100000
+    ```
+*   **Run AI (Inference)**: Let the trained AI navigate and track plumes.
+    ```bash
+    python laptop_brain.py --mode infer --model plume_tracker_dqn.zip
+    ```
+
+---
+
+## 3. Communication Protocol
+The system uses a strict packet format for reliability:
+*   **Sensor Packet (Pico → Laptop)**: `SCAN:d1,d2,d3,d4,d5|SMOKE:v|BATT:v\n`
+    *   `d1-d5`: Distances from 5-point ultrasonic sweep (0°, 45°, 90°, 135°, 180°).
+    *   `v`: Raw smoke value and battery voltage.
+*   **Command Packet (Laptop → Pico)**: Single characters `W` (Forward), `S` (Backward), `A` (Left), `D` (Right), `X` (Stop).
+
+> [!IMPORTANT]
+> The Pico includes a **500ms Watchdog Failsafe**. If it doesn't receive a command from the laptop within 500ms, it will automatically stop the motors for safety.
